@@ -17,10 +17,10 @@ WORLD_WIDTH   = 10000  # Large world that wraps around
 WORLD_HEIGHT  = SCREEN_HEIGHT  # Fixed vertical dimension
 GROUND_Y      = SCREEN_HEIGHT - 80  # Ground line position
 
-WORLD_SCROLL_SPEED = 2.0  # Constant world scrolling speed (pixels per frame at 60fps)
+WORLD_SCROLL_SPEED = 1.5  # Constant world scrolling speed (pixels per frame at 60fps)
 PLAYER_SPEED  = 4
-BULLET_SPEED  = 8
-ENEMY_SPEED   = 3
+BULLET_SPEED  = 9
+ENEMY_SPEED   = 2
 
 ENEMY_SPAWN_INTERVAL = 1000  # ms
 
