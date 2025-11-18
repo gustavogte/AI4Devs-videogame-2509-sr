@@ -17,6 +17,7 @@ WORLD_WIDTH   = 10000  # Large world that wraps around
 WORLD_HEIGHT  = SCREEN_HEIGHT  # Fixed vertical dimension
 GROUND_Y      = SCREEN_HEIGHT - 80  # Ground line position
 
+WORLD_SCROLL_SPEED = 2.0  # Constant world scrolling speed (pixels per frame at 60fps)
 PLAYER_SPEED  = 4
 BULLET_SPEED  = 8
 ENEMY_SPEED   = 3
@@ -408,8 +409,9 @@ class Player(pygame.sprite.Sprite):
         self.is_thrusting = False
         self.thrust_sound_channel = None
 
-    def handle_input(self, keys, dt):
-        """Handle input with delta time for smooth movement."""
+    def handle_input(self, keys, dt, world_scroll_dx):
+        """Handle input with delta time for smooth movement.
+        world_scroll_dx is the automatic world scrolling amount."""
         dx = dy = 0
         self.is_thrusting = False
         
@@ -430,7 +432,8 @@ class Player(pygame.sprite.Sprite):
             dy += speed_pixels
 
         # Update world coordinates
-        self.world_x += dx
+        # Player moves relative to world, but world also scrolls automatically
+        self.world_x += dx + world_scroll_dx  # Add world scroll to player movement
         self.world_y += dy
 
         # Wrap around horizontally
@@ -531,10 +534,13 @@ class Enemy(pygame.sprite.Sprite):
     def update(self, *args, **kwargs):
         dt = kwargs.get('dt', 16)
         camera_x = kwargs.get('camera_x', 0)
+        world_scroll_dx = kwargs.get('world_scroll_dx', 0)
         
         # Move in world space with delta time
+        # Enemies move left relative to world
         speed_pixels = abs(self.speed_x) * (dt / 16.67)  # Normalize to 60fps
-        self.world_x -= speed_pixels
+        # Enemies move left, and world scrolls right, so net movement is faster left
+        self.world_x -= speed_pixels + world_scroll_dx
         
         # Wrap around horizontally
         self.world_x = self.world_x % WORLD_WIDTH
@@ -597,10 +603,13 @@ class Bullet(pygame.sprite.Sprite):
     def update(self, *args, **kwargs):
         dt = kwargs.get('dt', 16)
         camera_x = kwargs.get('camera_x', 0)
+        world_scroll_dx = kwargs.get('world_scroll_dx', 0)
         
         # Move in world space with delta time
+        # Bullets move relative to world, but world also scrolls
         speed_pixels = abs(self.speed_x) * (dt / 16.67)  # Normalize to 60fps
-        self.world_x += speed_pixels * (1 if self.direction >= 0 else -1)
+        # Add world scroll to bullet movement
+        self.world_x += (speed_pixels * (1 if self.direction >= 0 else -1)) + world_scroll_dx
         
         # Wrap around horizontally
         self.world_x = self.world_x % WORLD_WIDTH
@@ -839,14 +848,17 @@ def main():
 
         # ---------- Update ----------
         if state == "playing":
-            # Update camera to follow player (smooth following)
-            target_camera_x = player.world_x - SCREEN_WIDTH // 2
-            camera_x += (target_camera_x - camera_x) * 0.1  # Smooth camera follow
+            # Calculate automatic world scrolling (constant speed)
+            world_scroll_dx = WORLD_SCROLL_SPEED * (dt / 16.67)  # Normalize to 60fps
+            
+            # Update camera to follow world scroll (camera moves with world)
+            camera_x += world_scroll_dx
             
             # Wrap camera around world
             camera_x = camera_x % WORLD_WIDTH
             
-            player.handle_input(keys, dt)
+            # Update player with world scroll
+            player.handle_input(keys, dt, world_scroll_dx)
             player.update_camera_position(camera_x)
             
             # Handle thrust sound
@@ -891,8 +903,8 @@ def main():
             # Update player
             player.update(now=now)
             
-            # Update entities with camera position
-            all_sprites.update(dt=dt, now=now, camera_x=camera_x)
+            # Update entities with camera position and world scroll
+            all_sprites.update(dt=dt, now=now, camera_x=camera_x, world_scroll_dx=world_scroll_dx)
             explosions.update(dt=dt, camera_x=camera_x)
 
             # Collisions: bullets vs enemies

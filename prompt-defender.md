@@ -328,5 +328,11 @@ I updated the game with less functionalities. More simple in just one file.
 
 Add sound Effect.
 
+Add Throust sound and graphic.
+
+Add 2D Scrolling and mountains.
+
+
+
 
 
