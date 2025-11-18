@@ -21,6 +21,8 @@ WORLD_SCROLL_SPEED = 1.5  # Constant world scrolling speed (pixels per frame at 
 PLAYER_SPEED  = 4
 BULLET_SPEED  = 9
 ENEMY_SPEED   = 2
+ENEMY_VERTICAL_SPEED = 1.5  # Vertical movement speed for enemies
+ENEMY_MOVEMENT_FREEDOM = True  # Enable more freedom of movement for enemies
 
 ENEMY_SPAWN_INTERVAL = 1000  # ms
 
@@ -511,9 +513,13 @@ class Enemy(pygame.sprite.Sprite):
         self.rect.centery = self.world_y
 
         self.speed_x          = -ENEMY_SPEED
+        self.speed_y          = random.uniform(-ENEMY_VERTICAL_SPEED, ENEMY_VERTICAL_SPEED)
         self.wobble_offset    = random.uniform(0, math.pi * 2)
-        self.wobble_speed     = random.uniform(0.03, 0.06)
-        self.wobble_amplitude = random.randint(2, 6)
+        self.wobble_speed     = random.uniform(0.05, 0.12)  # Increased wobble speed
+        self.wobble_amplitude = random.randint(5, 15)  # Increased wobble amplitude
+        self.movement_pattern = random.choice(['wobble', 'diagonal', 'zigzag', 'circle'])
+        self.pattern_timer    = 0
+        self.initial_y        = self.world_y  # Store initial Y for patterns
         
         # Initial camera position update
         self.update_camera_position(camera_x)
@@ -536,31 +542,63 @@ class Enemy(pygame.sprite.Sprite):
         camera_x = kwargs.get('camera_x', 0)
         world_scroll_dx = kwargs.get('world_scroll_dx', 0)
         
-        # Move in world space with delta time
-        # Enemies move left relative to world
-        speed_pixels = abs(self.speed_x) * (dt / 16.67)  # Normalize to 60fps
-        # Enemies move left, and world scrolls right, so net movement is faster left
-        self.world_x -= speed_pixels + world_scroll_dx
+        # Normalize speed to 60fps
+        speed_pixels_x = abs(self.speed_x) * (dt / 16.67)
+        speed_pixels_y = abs(self.speed_y) * (dt / 16.67)
+        
+        # Move horizontally - enemies move left relative to world
+        self.world_x -= speed_pixels_x + world_scroll_dx
         
         # Wrap around horizontally
         self.world_x = self.world_x % WORLD_WIDTH
         
-        # Wobble effect - calculate offset but don't modify base world_y
-        self.wobble_offset += self.wobble_speed
-        wobble_y_offset = int(math.sin(self.wobble_offset) * self.wobble_amplitude)
+        # Update movement pattern timer
+        self.pattern_timer += dt
         
-        # Calculate display y with wobble
-        display_y = self.world_y + wobble_y_offset
+        # Apply different movement patterns
+        if ENEMY_MOVEMENT_FREEDOM:
+            if self.movement_pattern == 'wobble':
+                # Wobble up and down
+                self.wobble_offset += self.wobble_speed
+                wobble_y = math.sin(self.wobble_offset) * self.wobble_amplitude
+                self.world_y = self.initial_y + wobble_y
+                
+            elif self.movement_pattern == 'diagonal':
+                # Move diagonally up or down
+                self.world_y += speed_pixels_y * (1 if self.speed_y > 0 else -1)
+                
+            elif self.movement_pattern == 'zigzag':
+                # Zigzag pattern - move up then down
+                zigzag_phase = (self.pattern_timer / 1000.0) % 2.0  # 2 second cycle
+                if zigzag_phase < 1.0:
+                    # Moving up
+                    self.world_y -= speed_pixels_y * 1.5
+                else:
+                    # Moving down
+                    self.world_y += speed_pixels_y * 1.5
+                    
+            elif self.movement_pattern == 'circle':
+                # Circular/elliptical movement
+                circle_phase = (self.pattern_timer / 2000.0) * 2 * math.pi  # 2 second circle
+                radius = self.wobble_amplitude
+                self.world_y = self.initial_y + math.sin(circle_phase) * radius
+        else:
+            # Simple wobble (original behavior)
+            self.wobble_offset += self.wobble_speed
+            wobble_y = math.sin(self.wobble_offset) * self.wobble_amplitude
+            self.world_y = self.initial_y + wobble_y
         
         # Clamp vertical position
         top_limit = 40
         bottom_limit = GROUND_Y - 20
-        if display_y < top_limit:
-            display_y = top_limit
-        elif display_y > bottom_limit:
-            display_y = bottom_limit
+        if self.world_y < top_limit:
+            self.world_y = top_limit
+            self.speed_y = abs(self.speed_y)  # Bounce down
+        elif self.world_y > bottom_limit:
+            self.world_y = bottom_limit
+            self.speed_y = -abs(self.speed_y)  # Bounce up
         
-        # Update screen position with wobble
+        # Update screen position
         screen_x = self.world_x - camera_x
         
         # Handle wrap-around
@@ -570,7 +608,7 @@ class Enemy(pygame.sprite.Sprite):
             screen_x -= WORLD_WIDTH
         
         self.rect.centerx = screen_x
-        self.rect.centery = display_y
+        self.rect.centery = self.world_y
 
 
 class Bullet(pygame.sprite.Sprite):
