@@ -327,6 +327,48 @@ def generate_enemy_spawn_sound():
     return pygame.mixer.Sound(buffer=bytes(silent_arr))
 
 
+def generate_thrust_sound():
+    """Generate continuous thrust/engine sound."""
+    # Low rumbling engine sound
+    duration = 500  # Longer for looping
+    samples = int(SAMPLE_RATE * duration / 1000.0)
+    max_sample = 2**(16 - 1) - 1
+    
+    # Create stereo array
+    arr = array.array('h', [0] * (samples * 2))
+    
+    for i in range(samples):
+        t = float(i) / SAMPLE_RATE
+        # Mix low frequencies for engine rumble
+        freq1 = 80 + math.sin(t * 2) * 10  # Varying low frequency
+        freq2 = 120 + math.sin(t * 3) * 15  # Slightly higher
+        sample = (math.sin(2 * math.pi * freq1 * t) * 0.4 + 
+                 math.sin(2 * math.pi * freq2 * t) * 0.2)
+        # Add some noise for realism
+        sample += (random.random() - 0.5) * 0.1
+        volume = 0.15
+        val = int(max_sample * volume * sample)
+        arr[i * 2] = val
+        arr[i * 2 + 1] = val
+    
+    # Create sound - use same method as generate_tone
+    if USE_SNDARRAY:
+        try:
+            import numpy as np
+            np_arr = np.frombuffer(arr, dtype=np.int16).reshape((samples, 2))
+            sound = pygame.sndarray.make_sound(np_arr)
+            sound.set_volume(0.3)
+            return sound
+        except:
+            pass
+    
+    # Fallback: silent sound
+    silent_arr = array.array('h', [0] * (samples * 2))
+    sound = pygame.mixer.Sound(buffer=bytes(silent_arr))
+    sound.set_volume(0.3)
+    return sound
+
+
 # ============================================================
 # SPRITE CLASSES
 # ============================================================
@@ -349,15 +391,24 @@ class Player(pygame.sprite.Sprite):
         self.invincible = False
         self.invincible_timer = 0
         self.invincible_duration = 2000  # 2 seconds of invincibility
+        
+        # Thrust tracking
+        self.is_thrusting = False
+        self.thrust_sound_channel = None
 
     def handle_input(self, keys):
         dx = dy = 0
+        was_thrusting = self.is_thrusting
+        self.is_thrusting = False
+        
         if keys[pygame.K_LEFT]:
             dx -= self.speed
             self.direction = -1
+            self.is_thrusting = True  # Moving forward (left)
         if keys[pygame.K_RIGHT]:
             dx += self.speed
             self.direction = 1
+            self.is_thrusting = True  # Moving forward (right)
         if keys[pygame.K_UP]:
             dy -= self.speed
         if keys[pygame.K_DOWN]:
@@ -539,6 +590,7 @@ def main():
                     'hit': generate_enemy_hit_sound(),
                     'death': generate_player_death_sound(),
                     'spawn': generate_enemy_spawn_sound(),
+                    'thrust': generate_thrust_sound(),
                 }
             else:
                 raise Exception("Sound generation not supported")
@@ -597,6 +649,16 @@ def main():
         # ---------- Update ----------
         if state == "playing":
             player.handle_input(keys)
+            
+            # Handle thrust sound
+            if sound_enabled and 'thrust' in sounds:
+                if player.is_thrusting:
+                    if player.thrust_sound_channel is None or not player.thrust_sound_channel.get_busy():
+                        player.thrust_sound_channel = sounds['thrust'].play(-1)  # Loop
+                else:
+                    if player.thrust_sound_channel and player.thrust_sound_channel.get_busy():
+                        player.thrust_sound_channel.stop()
+                        player.thrust_sound_channel = None
 
             # Shooting
             if keys[pygame.K_SPACE]:
@@ -673,6 +735,36 @@ def main():
                 screen.blit(player.image, player.rect)
         else:
             screen.blit(player.image, player.rect)
+        
+        # Draw thrust effect when moving forward
+        if player.is_thrusting:
+            # Calculate thrust position (back of ship)
+            if player.direction >= 0:  # Facing right
+                thrust_x = player.rect.left - 8
+                thrust_y = player.rect.centery
+            else:  # Facing left
+                thrust_x = player.rect.right + 8
+                thrust_y = player.rect.centery
+            
+            # Draw thrust particles (orange/yellow flame)
+            for i in range(3):
+                offset_x = random.randint(-2, 2)
+                offset_y = random.randint(-3, 3)
+                particle_x = thrust_x + offset_x
+                particle_y = thrust_y + offset_y
+                
+                # Draw flame particles
+                if i == 0:
+                    color = COLORS["F"]  # Bright orange
+                    size = 3
+                elif i == 1:
+                    color = COLORS["A"]  # Orange
+                    size = 2
+                else:
+                    color = COLORS["Y"]  # Yellow
+                    size = 2
+                
+                pygame.draw.circle(screen, color, (particle_x, particle_y), size)
 
         score_surf = font.render(f"SCORE: {score}", True, (0, 255, 0))
         screen.blit(score_surf, (10, 10))
