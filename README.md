@@ -1,6 +1,21 @@
 # EN
 # Video game
 
+# Activate Virtual environment 
+```bash
+source venv/bin/activate
+```
+
+# Install requirements 
+```bash
+pip3 install -r requirements.txt
+```
+# Run Defender
+```bash
+python3 defender.py
+```
+
+
 As a final exercise in the introduction, use what you've learned to create a **video game** using HTML, CSS, and JavaScript.
 
 For reference, the development of a Snake game has been provided, but you are free to choose any other game concept that interests you.
